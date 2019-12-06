@@ -76,7 +76,7 @@ class Image:
         atype=ColorTableEntry * (1 << header.size + 1),
     )
 
-    lzw: LZWMin
+    lzw:    LZWMin
     data:   repeat(SubBlock, until=lambda sub: sub.header.size == 0)
 
 

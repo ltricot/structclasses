@@ -5,10 +5,15 @@ import abc
 
 from . import structclasses as stc
 
+
+# don't tell anyone i wrote this
 _CData = ctypes.c_ubyte.__mro__[2]
 
 
 def blockclass(cls):
+    # maybe doing the same as structclasses (making
+    # a dataclass out of cls) would be of benefit
+
     # pre-compile type annotation code
     annot = getattr(cls, '__annotations__', {})
     for attr, code in annot.items():
@@ -18,6 +23,7 @@ def blockclass(cls):
             mode='eval')
         annot[attr] = bytecode
 
+    # we are debug friendly and also nice
     def __str__(self):
         def _get_str(cval):
             if hasattr(cval, '__iter__'):
@@ -27,10 +33,16 @@ def blockclass(cls):
                           for attr in self.__annotations__)
         return f'{cls.__name__}({attrs})'
     cls.__str__ = __str__
+
     return cls
 
 
 class _BlockBase(abc.ABC):
+    # maybe this should inherit from `array.array` so
+    # that memoryview(_BlockBase) would be the binary
+    # representation of the object (the output of writeinto)
+    # or maybe this would be a huge mistake
+
     @abc.abstractmethod
     def _frombuffer(self, buf, offset=0):
         raise NotImplementedError()
@@ -76,13 +88,16 @@ def repeat(atype, until):
 
 
 def readfrom(bcls, buf, offset=0):
+    # the parsing main loop dances with the type evaluation
+    # coroutine to produce the final object
+
     def _get_types(bcls):
         globalns = sys.modules[bcls.__module__].__dict__
         localns = bcls.__dict__
 
         for attr, code in bcls.__annotations__.items():
-            type = eval(code, globalns, localns)
-            val = yield attr, type
+            atype = eval(code, globalns, localns)
+            val = yield attr, atype
             setattr(bcls, attr, val)
 
     # recursion leaf
@@ -97,13 +112,14 @@ def readfrom(bcls, buf, offset=0):
     val = None
 
     # recurse on attributes
+    # this is the best part
     while True:
         try:
-            attr, type = types.send(val)
+            attr, atype = types.send(val)
         except StopIteration:
             break
 
-        val = type()
+        val = atype()
         off += readfrom(val, buf, offset=off)
     return off - offset
 
